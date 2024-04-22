@@ -2,13 +2,14 @@ function fluid2d()
 
 GRAVITY=-10;
 DT=0.1;
+O=1.9;
 CO=0.5;
-NUM_ITER=50;
+NUM_ITER=1;
 TIME_STEP_TOTAL=1000;
-PARTICLE_NUM=50000;
-GRID_H=100;
-GRID_W=150;
-PARTICLE_PER_GRID=10;
+PARTICLE_NUM=10000;
+GRID_H=20;
+GRID_W=20;
+PARTICLE_PER_GRID=20;
 
 grid=zeros(GRID_H,GRID_W);
 grid_type=ones(GRID_H,GRID_W);
@@ -19,8 +20,8 @@ grid_v_y_w=zeros(GRID_H+1,GRID_W);
 
 particles=zeros(PARTICLE_NUM,2);
 for i=1:PARTICLE_NUM
-    particles(i,1)=rand*GRID_W;
-    particles(i,2)=rand*GRID_H;
+    particles(i,1)=rand*GRID_W/2;
+    particles(i,2)=rand*GRID_H/2;
 end
 particle_v=zeros(PARTICLE_NUM,2);
 particle_v_copy=zeros(PARTICLE_NUM,2);
@@ -343,10 +344,11 @@ function solve_incompressible()
         for y=1:GRID_H
             for x=1:GRID_W
                 if grid(y,x)>PARTICLE_PER_GRID
-                    d=-grid_v_x_w(y,x);
-                    d=d+grid_v_x_w(y,x+1);
-                    d=d-grid_v_y_w(y,x);
-                    d=d+grid_v_y_w(y+1,x);
+                    d=-grid_v_x(y,x);
+                    d=d+grid_v_x(y,x+1);
+                    d=d-grid_v_y(y,x);
+                    d=d+grid_v_y(y+1,x);
+                    d=d*O;
                     s=0;
                     if is_valid_grid(x-1,y)
                         s=s+1;
@@ -361,17 +363,19 @@ function solve_incompressible()
                         s=s+1;
                     end
 
+                    %disp(d)
+
                     if is_valid_grid(x-1,y)
-                        grid_v_x_w(y,x)=grid_v_x_w(y,x)+d/s;
+                        grid_v_x(y,x)=grid_v_x(y,x)+d/s;
                     end
                     if is_valid_grid(x+1,y)
-                        grid_v_x_w(y,x+1)=grid_v_x_w(y,x+1)-d/s;
+                        grid_v_x(y,x+1)=grid_v_x(y,x+1)-d/s;
                     end
                     if is_valid_grid(x,y-1)
-                        grid_v_y_w(y,x)=grid_v_y_w(y,x)+d/s;
+                        grid_v_y(y,x)=grid_v_y(y,x)+d/s;
                     end
                     if is_valid_grid(x,y+1)
-                        grid_v_y_w(y+1,x)=grid_v_y_w(y+1,x)-d/s;
+                        grid_v_y(y+1,x)=grid_v_y(y+1,x)-d/s;
                     end
                 end
             end
