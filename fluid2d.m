@@ -2,13 +2,13 @@ function fluid2d()
 
 GRAVITY=-10;
 DT=0.1;
-CO=0.8;
+CO=0.5;
 NUM_ITER=50;
 TIME_STEP_TOTAL=1000;
-PARTICLE_NUM=1000;
+PARTICLE_NUM=50000;
 GRID_H=100;
 GRID_W=150;
-PARTICLE_PER_GRID=40;
+PARTICLE_PER_GRID=10;
 
 grid=zeros(GRID_H,GRID_W);
 grid_type=ones(GRID_H,GRID_W);
@@ -340,6 +340,42 @@ end
 
 function solve_incompressible()
     for ite=1:NUM_ITER
+        for y=1:GRID_H
+            for x=1:GRID_W
+                if grid(y,x)>PARTICLE_PER_GRID
+                    d=-grid_v_x_w(y,x);
+                    d=d+grid_v_x_w(y,x+1);
+                    d=d-grid_v_y_w(y,x);
+                    d=d+grid_v_y_w(y+1,x);
+                    s=0;
+                    if is_valid_grid(x-1,y)
+                        s=s+1;
+                    end
+                    if is_valid_grid(x+1,y)
+                        s=s+1;
+                    end
+                    if is_valid_grid(x,y-1)
+                        s=s+1;
+                    end
+                    if is_valid_grid(x,y+1)
+                        s=s+1;
+                    end
+
+                    if is_valid_grid(x-1,y)
+                        grid_v_x_w(y,x)=grid_v_x_w(y,x)+d/s;
+                    end
+                    if is_valid_grid(x+1,y)
+                        grid_v_x_w(y,x+1)=grid_v_x_w(y,x+1)-d/s;
+                    end
+                    if is_valid_grid(x,y-1)
+                        grid_v_y_w(y,x)=grid_v_y_w(y,x)+d/s;
+                    end
+                    if is_valid_grid(x,y+1)
+                        grid_v_y_w(y+1,x)=grid_v_y_w(y+1,x)-d/s;
+                    end
+                end
+            end
+        end
     end
 end
 
@@ -376,6 +412,7 @@ for i=1:TIME_STEP_TOTAL
     particle_v=zeros(PARTICLE_NUM,2);
     
     % make grid incompressible
+    solve_incompressible();
 
     % add particle velocity back
     for j=1:PARTICLE_NUM
@@ -388,7 +425,7 @@ for i=1:TIME_STEP_TOTAL
     % update position
     particles=particles+particle_v*DT;
     
-    imshow(flipud(grid));
+    imshow(flipud(grid/10));
     %h.GridVisible='off';
     %disp(max(grid_v_y,[],'all'))
     drawnow
