@@ -2,9 +2,10 @@ function fluid2d()
 
 GRAVITY=-10;
 DT=0.1;
+CO=0.8;
 NUM_ITER=50;
 TIME_STEP_TOTAL=1000;
-PARTICLE_NUM=10000;
+PARTICLE_NUM=1000;
 GRID_H=100;
 GRID_W=150;
 PARTICLE_PER_GRID=40;
@@ -13,6 +14,8 @@ grid=zeros(GRID_H,GRID_W);
 grid_type=ones(GRID_H,GRID_W);
 grid_v_x=zeros(GRID_H,GRID_W+1);
 grid_v_y=zeros(GRID_H+1,GRID_W);
+grid_v_x_w=zeros(GRID_H,GRID_W+1);
+grid_v_y_w=zeros(GRID_H+1,GRID_W);
 
 particles=zeros(PARTICLE_NUM,2);
 for i=1:PARTICLE_NUM
@@ -20,6 +23,7 @@ for i=1:PARTICLE_NUM
     particles(i,2)=rand*GRID_H;
 end
 particle_v=zeros(PARTICLE_NUM,2);
+particle_v_copy=zeros(PARTICLE_NUM,2);
 
 function addGravity()
     particle_v(:,2)=particle_v(:,2)+GRAVITY*DT;
@@ -118,16 +122,20 @@ function particle_vx_to_grid(vx,pos)
     w=w1*s1+w2*s2+w3*s3+w4*s4;
 
     if is_valid_grid(i1(1),i1(2))
-        grid_v_x(i1(2),i1(1))=vx*w1/w;
+        grid_v_x(i1(2),i1(1))=grid_v_x(i1(2),i1(1))+vx*w1/w;
+        grid_v_x_w(i1(2),i1(1))=grid_v_x_w(i1(2),i1(1))+w1/w;
     end
     if is_valid_grid(i2(1),i2(2))
-        grid_v_x(i2(2),i2(1))=vx*w2/w;
+        grid_v_x(i2(2),i2(1))=grid_v_x(i2(2),i2(1))+vx*w2/w;
+        grid_v_x_w(i2(2),i2(1))=grid_v_x_w(i2(2),i2(1))+w2/w;
     end
     if is_valid_grid(i3(1),i3(2))
-        grid_v_x(i3(2),i3(1))=vx*w3/w;
+        grid_v_x(i3(2),i3(1))=grid_v_x(i3(2),i3(1))+vx*w3/w;
+        grid_v_x_w(i3(2),i3(1))=grid_v_x_w(i3(2),i3(1))+w3/w;
     end
     if is_valid_grid(i4(1),i4(2))
-        grid_v_x(i4(2),i4(1))=vx*w4/w;
+        grid_v_x(i4(2),i4(1))=grid_v_x(i4(2),i4(1))+vx*w4/w;
+        grid_v_x_w(i4(2),i4(1))=grid_v_x_w(i4(2),i4(1))+w4/w;
     end
 end
 
@@ -183,20 +191,24 @@ function particle_vy_to_grid(vy,pos)
     w=w1*s1+w2*s2+w3*s3+w4*s4;
 
     if is_valid_grid(i1(1),i1(2))
-        grid_v_y(i1(2),i1(1))=vy*w1/w;
+        grid_v_y(i1(2),i1(1))=grid_v_y(i1(2),i1(1))+vy*w1/w;
+        grid_v_y_w(i1(2),i1(1))=grid_v_y_w(i1(2),i1(1))+w1/w;
     end
     if is_valid_grid(i2(1),i2(2))
-        grid_v_y(i2(2),i2(1))=vy*w2/w;
+        grid_v_y(i2(2),i2(1))=grid_v_y(i2(2),i2(1))+vy*w2/w;
+        grid_v_y_w(i2(2),i2(1))=grid_v_y_w(i2(2),i2(1))+w2/w;
     end
     if is_valid_grid(i3(1),i3(2))
-        grid_v_y(i3(2),i3(1))=vy*w3/w;
+        grid_v_y(i3(2),i3(1))=grid_v_y(i3(2),i3(1))+vy*w3/w;
+        grid_v_y_w(i3(2),i3(1))=grid_v_y_w(i3(2),i3(1))+w3/w;
     end
     if is_valid_grid(i4(1),i4(2))
-        grid_v_y(i4(2),i4(1))=vy*w4/w;
+        grid_v_y(i4(2),i4(1))=grid_v_y(i4(2),i4(1))+vy*w4/w;
+        grid_v_y_w(i4(2),i4(1))=grid_v_y_w(i4(2),i4(1))+w4/w;
     end
 end
 
-function grid_vx_to_particle(vx,pos,index)
+function grid_vx_to_particle(pos,index)
     x=pos(1);
     y=pos(2);
     dx=x-floor(x);
@@ -248,20 +260,20 @@ function grid_vx_to_particle(vx,pos,index)
     w=w1*s1+w2*s2+w3*s3+w4*s4;
 
     if is_valid_grid(i1(1),i1(2))
-        grid_v_x(i1(2),i1(1))=vx*w1/w;
+        particle_v(index,1)=particle_v(index,1)+grid_v_x(i1(2),i1(1))*w1/w/grid_v_x_w(i1(2),i1(1));
     end
     if is_valid_grid(i2(1),i2(2))
-        grid_v_x(i2(2),i2(1))=vx*w2/w;
+        particle_v(index,1)=particle_v(index,1)+grid_v_x(i2(2),i2(1))*w2/w/grid_v_x_w(i2(2),i2(1));
     end
     if is_valid_grid(i3(1),i3(2))
-        grid_v_x(i3(2),i3(1))=vx*w3/w;
+        particle_v(index,1)=particle_v(index,1)+grid_v_x(i3(2),i3(1))*w3/w/grid_v_x_w(i3(2),i3(1));
     end
     if is_valid_grid(i4(1),i4(2))
-        grid_v_x(i4(2),i4(1))=vx*w4/w;
+        particle_v(index,1)=particle_v(index,1)+grid_v_x(i4(2),i4(1))*w4/w/grid_v_x_w(i4(2),i4(1));
     end
 end
 
-function grid_vy_to_particle(vy,pos,index)
+function grid_vy_to_particle(pos,index)
     x=pos(1);
     y=pos(2);
     dx=x-floor(x);
@@ -313,16 +325,21 @@ function grid_vy_to_particle(vy,pos,index)
     w=w1*s1+w2*s2+w3*s3+w4*s4;
 
     if is_valid_grid(i1(1),i1(2))
-        grid_v_y(i1(2),i1(1))=vy*w1/w;
+        particle_v(index,2)=particle_v(index,2)+grid_v_y(i1(2),i1(1))*w1/w/grid_v_y_w(i1(2),i1(1));
     end
     if is_valid_grid(i2(1),i2(2))
-        grid_v_y(i2(2),i2(1))=vy*w2/w;
+        particle_v(index,2)=particle_v(index,2)+grid_v_y(i2(2),i2(1))*w2/w/grid_v_y_w(i2(2),i2(1));
     end
     if is_valid_grid(i3(1),i3(2))
-        grid_v_y(i3(2),i3(1))=vy*w3/w;
+        particle_v(index,2)=particle_v(index,2)+grid_v_y(i3(2),i3(1))*w3/w/grid_v_y_w(i3(2),i3(1));
     end
     if is_valid_grid(i4(1),i4(2))
-        grid_v_y(i4(2),i4(1))=vy*w4/w;
+        particle_v(index,2)=particle_v(index,2)+grid_v_y(i4(2),i4(1))*w4/w/grid_v_y_w(i4(2),i4(1));
+    end
+end
+
+function solve_incompressible()
+    for ite=1:NUM_ITER
     end
 end
 
@@ -337,6 +354,8 @@ for i=1:TIME_STEP_TOTAL
     grid=zeros(GRID_H,GRID_W);
     grid_v_x=zeros(GRID_H,GRID_W+1);
     grid_v_y=zeros(GRID_H+1,GRID_W);
+    grid_v_x_w=zeros(GRID_H,GRID_W+1);
+    grid_v_y_w=zeros(GRID_H+1,GRID_W);
 
     % update particles in grid
     for j=1:PARTICLE_NUM
@@ -352,15 +371,26 @@ for i=1:TIME_STEP_TOTAL
         particle_vx_to_grid(particle_v(j,1),particles(j,:));
         particle_vy_to_grid(particle_v(j,2),particles(j,:));
     end
+    % clear particle velocity after interpolation
+    particle_v_copy=particle_v;
+    particle_v=zeros(PARTICLE_NUM,2);
     
     % make grid incompressible
+
+    % add particle velocity back
+    for j=1:PARTICLE_NUM
+        grid_vx_to_particle(particles(j,:),j);
+        grid_vy_to_particle(particles(j,:),j);
+    end
+
+    particle_v=CO*particle_v_copy+(1-CO)*particle_v;
 
     % update position
     particles=particles+particle_v*DT;
     
-    imshow(flipud(grid/10));
+    imshow(flipud(grid));
     %h.GridVisible='off';
-    %disp(max(grid_v,[],'all'))
+    %disp(max(grid_v_y,[],'all'))
     drawnow
 
 end
