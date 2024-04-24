@@ -1,38 +1,39 @@
 function fluid2d_p()
 
-GRAVITY=-10;
+GRAVITY=-1;
 DT=0.1;
-O=1.9;
-K=1;
-CO=0.5;
-NUM_ITER=10;
 TIME_STEP_TOTAL=1000;
 PARTICLE_NUM=500;
 GRID_H=10;
 GRID_W=10;
-PARTICLE_PER_GRID=10;
-PARTICLE_R=4;
-
 GRID_HASH_SIZE=100;
+
+% particle properties
+M=0.1;
+M2=M*M;
+R=0.8;
+R2=R*R;
+R3=R*R2;
+R4=R*R3;
+R5=R*R4;
+GAS_CONSTANT=2;
+RESTDENSITY=2;
+VISCOSITY=-0.01;
 
 img=zeros(GRID_H*5,GRID_W*5);
 
-grid=zeros(GRID_H,GRID_W);
-grid_type=ones(GRID_H,GRID_W);
-grid_v_x=zeros(GRID_H,GRID_W+1);
-grid_v_y=zeros(GRID_H+1,GRID_W);
-grid_v_x_w=zeros(GRID_H,GRID_W+1);
-grid_v_y_w=zeros(GRID_H+1,GRID_W);
 grid_hash=zeros(GRID_H,GRID_W,GRID_HASH_SIZE);
 unhashed_particles=zeros(PARTICLE_NUM+1);
 
 particles=zeros(PARTICLE_NUM,2);
 for i=1:PARTICLE_NUM
-    particles(i,1)=rand*GRID_W/2;
-    particles(i,2)=rand*GRID_H/2;
+    particles(i,1)=rand*GRID_W/2+GRID_W/4;
+    particles(i,2)=rand*GRID_H/2+GRID_W/4;
 end
 particle_v=zeros(PARTICLE_NUM,2);
-particle_v_copy=zeros(PARTICLE_NUM,2);
+particle_a=zeros(PARTICLE_NUM,2);
+particle_d=zeros(PARTICLE_NUM,2);
+particle_p=zeros(PARTICLE_NUM,2);
 
 function add_gravity()
     particle_v(:,2)=particle_v(:,2)+GRAVITY*DT;
@@ -47,374 +48,20 @@ function solve_bound_collision()
         x=particles(i,1);
         y=particles(i,2);
         if x<0
-            particles(i,1)=0;
+            particles(i,1)=0.1;
             particle_v(i,1)=-particle_v(i,1)/10;
         end
         if x>GRID_W
-            particles(i,1)=GRID_W;
+            particles(i,1)=GRID_W-0.1;
             particle_v(i,1)=-particle_v(i,1)/10;
         end
         if y<0
-            particles(i,2)=0;
+            particles(i,2)=0.1;
             particle_v(i,2)=-particle_v(i,2)/10;
         end
         if y>GRID_H
-            particles(i,2)=GRID_H;
+            particles(i,2)=GRID_H-0.1;
             particle_v(i,2)=-particle_v(i,2)/10;
-        end
-    end
-end
-
-function valid = is_valid_grid(x,y)
-    valid = ~is_out_of_bound([x,y]);
-    if valid
-        valid = valid && grid_type(y,x);
-    end
-end
-
-function particle_vx_to_grid(vx,pos)
-    x=pos(1);
-    y=pos(2);
-    dx=x-floor(x);
-    dy=y-floor(y);
-    x=ceil(x);
-    y=ceil(y);
-    i1=zeros(2);
-    i2=zeros(2);
-    i3=zeros(2);
-    i4=zeros(2);
-
-    if dx<0.5
-        dx=dx+0.5;
-        i1=[x-1,y+1];
-        i2=[x,y+1];
-        i3=[x,y];
-        i4=[x-1,y];
-    else
-        dx=dx-0.5;
-        i1=[x,y+1];
-        i2=[x+1,y+1];
-        i3=[x+1,y];
-        i4=[x,y];
-    end
-
-    w1=(1-dx)*(1-dy);
-    w2=dx*(1-dy);
-    w3=dx*dy;
-    w4=(1-dx)*dy;
-
-    s1=0;
-    s2=0;
-    s3=0;
-    s4=0;
-
-    if is_valid_grid(i1(1),i1(2))
-        s1=1;
-    end
-    if is_valid_grid(i2(1),i2(2))
-        s2=1;
-    end
-    if is_valid_grid(i3(1),i3(2))
-        s3=1;
-    end
-    if is_valid_grid(i4(1),i4(2))
-        s4=1;
-    end
-
-    w=w1*s1+w2*s2+w3*s3+w4*s4;
-
-    if is_valid_grid(i1(1),i1(2))
-        grid_v_x(i1(2),i1(1))=grid_v_x(i1(2),i1(1))+vx*w1/w;
-        grid_v_x_w(i1(2),i1(1))=grid_v_x_w(i1(2),i1(1))+w1/w;
-    end
-    if is_valid_grid(i2(1),i2(2))
-        grid_v_x(i2(2),i2(1))=grid_v_x(i2(2),i2(1))+vx*w2/w;
-        grid_v_x_w(i2(2),i2(1))=grid_v_x_w(i2(2),i2(1))+w2/w;
-    end
-    if is_valid_grid(i3(1),i3(2))
-        grid_v_x(i3(2),i3(1))=grid_v_x(i3(2),i3(1))+vx*w3/w;
-        grid_v_x_w(i3(2),i3(1))=grid_v_x_w(i3(2),i3(1))+w3/w;
-    end
-    if is_valid_grid(i4(1),i4(2))
-        grid_v_x(i4(2),i4(1))=grid_v_x(i4(2),i4(1))+vx*w4/w;
-        grid_v_x_w(i4(2),i4(1))=grid_v_x_w(i4(2),i4(1))+w4/w;
-    end
-end
-
-function particle_vy_to_grid(vy,pos)
-    x=pos(1);
-    y=pos(2);
-    dx=x-floor(x);
-    dy=y-floor(y);
-    x=ceil(x);
-    y=ceil(y);
-    i1=zeros(2);
-    i2=zeros(2);
-    i3=zeros(2);
-    i4=zeros(2);
-
-    if dy<0.5
-        dy=dy+0.5;
-        i1=[x,y];
-        i2=[x+1,y];
-        i3=[x+1,y-1];
-        i4=[x,y-1];
-    else
-        dy=dy-0.5;
-        i1=[x,y+1];
-        i2=[x+1,y+1];
-        i3=[x+1,y];
-        i4=[x,y];
-    end
-
-    w1=(1-dx)*(1-dy);
-    w2=dx*(1-dy);
-    w3=dx*dy;
-    w4=(1-dx)*dy;
-
-    s1=0;
-    s2=0;
-    s3=0;
-    s4=0;
-
-    if is_valid_grid(i1(1),i1(2))
-        s1=1;
-    end
-    if is_valid_grid(i2(1),i2(2))
-        s2=1;
-    end
-    if is_valid_grid(i3(1),i3(2))
-        s3=1;
-    end
-    if is_valid_grid(i4(1),i4(2))
-        s4=1;
-    end
-
-    w=w1*s1+w2*s2+w3*s3+w4*s4;
-
-    if is_valid_grid(i1(1),i1(2))
-        grid_v_y(i1(2),i1(1))=grid_v_y(i1(2),i1(1))+vy*w1/w;
-        grid_v_y_w(i1(2),i1(1))=grid_v_y_w(i1(2),i1(1))+w1/w;
-    end
-    if is_valid_grid(i2(1),i2(2))
-        grid_v_y(i2(2),i2(1))=grid_v_y(i2(2),i2(1))+vy*w2/w;
-        grid_v_y_w(i2(2),i2(1))=grid_v_y_w(i2(2),i2(1))+w2/w;
-    end
-    if is_valid_grid(i3(1),i3(2))
-        grid_v_y(i3(2),i3(1))=grid_v_y(i3(2),i3(1))+vy*w3/w;
-        grid_v_y_w(i3(2),i3(1))=grid_v_y_w(i3(2),i3(1))+w3/w;
-    end
-    if is_valid_grid(i4(1),i4(2))
-        grid_v_y(i4(2),i4(1))=grid_v_y(i4(2),i4(1))+vy*w4/w;
-        grid_v_y_w(i4(2),i4(1))=grid_v_y_w(i4(2),i4(1))+w4/w;
-    end
-end
-
-function grid_vx_to_particle(pos,index)
-    x=pos(1);
-    y=pos(2);
-    dx=x-floor(x);
-    dy=y-floor(y);
-    x=ceil(x);
-    y=ceil(y);
-    i1=zeros(2);
-    i2=zeros(2);
-    i3=zeros(2);
-    i4=zeros(2);
-
-    if dx<0.5
-        dx=dx+0.5;
-        i1=[x-1,y+1];
-        i2=[x,y+1];
-        i3=[x,y];
-        i4=[x-1,y];
-    else
-        dx=dx-0.5;
-        i1=[x,y+1];
-        i2=[x+1,y+1];
-        i3=[x+1,y];
-        i4=[x,y];
-    end
-
-    w1=(1-dx)*(1-dy);
-    w2=dx*(1-dy);
-    w3=dx*dy;
-    w4=(1-dx)*dy;
-
-    s1=0;
-    s2=0;
-    s3=0;
-    s4=0;
-
-    if is_valid_grid(i1(1),i1(2))
-        s1=1;
-    end
-    if is_valid_grid(i2(1),i2(2))
-        s2=1;
-    end
-    if is_valid_grid(i3(1),i3(2))
-        s3=1;
-    end
-    if is_valid_grid(i4(1),i4(2))
-        s4=1;
-    end
-
-    w=w1*s1+w2*s2+w3*s3+w4*s4;
-
-    w01=1;
-    w02=1;
-    w03=1;  
-    w04=1;
-
-    if is_valid_grid(i1(1),i1(2))
-        if grid_v_x_w(i1(2),i1(1))~=0
-            w01=grid_v_x_w(i1(2),i1(1));
-        end
-        particle_v(index,1)=particle_v(index,1)+grid_v_x(i1(2),i1(1))*w1/w/w01;
-    end
-    if is_valid_grid(i2(1),i2(2))
-        if grid_v_x_w(i2(2),i2(1))~=0
-            w02=grid_v_x_w(i2(2),i2(1));
-        end
-        particle_v(index,1)=particle_v(index,1)+grid_v_x(i2(2),i2(1))*w2/w/w02;
-    end
-    if is_valid_grid(i3(1),i3(2))
-        if grid_v_x_w(i3(2),i3(1))~=0
-            w03=grid_v_x_w(i3(2),i3(1));
-        end
-        particle_v(index,1)=particle_v(index,1)+grid_v_x(i3(2),i3(1))*w3/w/w03;
-    end
-    if is_valid_grid(i4(1),i4(2))
-        if grid_v_x_w(i4(2),i4(1))~=0
-            w04=grid_v_x_w(i4(2),i4(1));
-        end
-        particle_v(index,1)=particle_v(index,1)+grid_v_x(i4(2),i4(1))*w4/w/w04;
-    end
-end
-
-function grid_vy_to_particle(pos,index)
-    x=pos(1);
-    y=pos(2);
-    dx=x-floor(x);
-    dy=y-floor(y);
-    x=ceil(x);
-    y=ceil(y);
-    i1=zeros(2);
-    i2=zeros(2);
-    i3=zeros(2);
-    i4=zeros(2);
-
-    if dy<0.5
-        dy=dy+0.5;
-        i1=[x,y];
-        i2=[x+1,y];
-        i3=[x+1,y-1];
-        i4=[x,y-1];
-    else
-        dy=dy-0.5;
-        i1=[x,y+1];
-        i2=[x+1,y+1];
-        i3=[x+1,y];
-        i4=[x,y];
-    end
-
-    w1=(1-dx)*(1-dy);
-    w2=dx*(1-dy);
-    w3=dx*dy;
-    w4=(1-dx)*dy;
-
-    s1=0;
-    s2=0;
-    s3=0;
-    s4=0;
-
-    if is_valid_grid(i1(1),i1(2))
-        s1=1;
-    end
-    if is_valid_grid(i2(1),i2(2))
-        s2=1;
-    end
-    if is_valid_grid(i3(1),i3(2))
-        s3=1;
-    end
-    if is_valid_grid(i4(1),i4(2))
-        s4=1;
-    end
-
-    w=w1*s1+w2*s2+w3*s3+w4*s4;
-
-    w01=1;
-    w02=1;
-    w03=1;
-    w04=1;
-
-    if is_valid_grid(i1(1),i1(2))
-        if grid_v_y_w(i1(2),i1(1))~=0
-            w01=grid_v_y_w(i1(2),i1(1));
-        end
-        particle_v(index,2)=particle_v(index,2)+grid_v_y(i1(2),i1(1))*w1/w/w01;
-    end
-    if is_valid_grid(i2(1),i2(2))
-        if grid_v_y_w(i2(2),i2(1))~=0
-            w02=grid_v_y_w(i2(2),i2(1));
-        end
-        particle_v(index,2)=particle_v(index,2)+grid_v_y(i2(2),i2(1))*w2/w/w02;
-    end
-    if is_valid_grid(i3(1),i3(2))
-        if grid_v_y_w(i3(2),i3(1))~=0
-            w03=grid_v_y_w(i3(2),i3(1));
-        end
-        particle_v(index,2)=particle_v(index,2)+grid_v_y(i3(2),i3(1))*w3/w/w03;
-    end
-    if is_valid_grid(i4(1),i4(2))
-        if grid_v_y_w(i4(2),i4(1))~=0
-            w04=grid_v_y_w(i4(2),i4(1));
-        end
-        particle_v(index,2)=particle_v(index,2)+grid_v_y(i4(2),i4(1))*w4/w/w04;
-    end
-end
-
-function solve_incompressible()
-    for ite=1:NUM_ITER
-        for y=1:GRID_H
-            for x=1:GRID_W
-                if grid(y,x)>PARTICLE_PER_GRID
-                    d=-grid_v_x(y,x);
-                    d=d+grid_v_x(y,x+1);
-                    d=d-grid_v_y(y,x);
-                    d=d+grid_v_y(y+1,x);
-                    d=d*O;
-                    d=d-K*(grid(y,x)-PARTICLE_PER_GRID);
-                    s=0;
-                    if is_valid_grid(x-1,y)
-                        s=s+1;
-                    end
-                    if is_valid_grid(x+1,y)
-                        s=s+1;
-                    end
-                    if is_valid_grid(x,y-1)
-                        s=s+1;
-                    end
-                    if is_valid_grid(x,y+1)
-                        s=s+1;
-                    end
-
-                    %disp(d)
-
-                    if is_valid_grid(x-1,y)
-                        grid_v_x(y,x)=grid_v_x(y,x)+d/s;
-                    end
-                    if is_valid_grid(x+1,y)
-                        grid_v_x(y,x+1)=grid_v_x(y,x+1)-d/s;
-                    end
-                    if is_valid_grid(x,y-1)
-                        grid_v_y(y,x)=grid_v_y(y,x)+d/s;
-                    end
-                    if is_valid_grid(x,y+1)
-                        grid_v_y(y+1,x)=grid_v_y(y+1,x)-d/s;
-                    end
-                end
-            end
         end
     end
 end
@@ -438,37 +85,126 @@ function hash_particles()
     end
 end
 
-function particle_collision()
-    
-        for i=1:GRID_H
-            for j=1:GRID_H
-                k=grid_hash(i,j,1);
-                if k>1
-                    for m=2:k
-                        if m<k
-                            for n=m+1:k
-                                d=particles(m,:)-particles(n,:);
-                                %disp(norm(d))
-                                if norm(d)<2*PARTICLE_R
-                                    if norm(d)==0
-                                        d=[1,1];
-                                    end
-                                    dp=d/norm(d)*(PARTICLE_R-norm(d)/2)/50;
-                                    %if isnan(dp(1)) || isnan(dp(2))
-                                        %disp(normalize(d))
-                                    %end
-                                    particle_v(m,1)=particle_v(m,1)+dp(1);
-                                    particle_v(m,2)=particle_v(m,2)+dp(2);
-                                    particle_v(n,1)=particle_v(n,1)-dp(1);
-                                    particle_v(n,2)=particle_v(n,2)-dp(2);
-                                end
-                            end
+function k = poly6kernel(distance_sqr)
+    x=1-distance_sqr/R2;
+    k=315/(64*pi*R3)*x*x*x;
+end
+
+function k = spikykerneld1(distance)
+    x=1-distance/R;
+    k=-45/(pi*R4)*x*x;
+end
+
+function k = spikykerneld2(distance)
+    x=1-distance/R;
+    k=90/(pi*R5)*x;
+end
+
+function k = spikykernelg(distance,direction)
+    k=spikykerneld1(distance)*direction;
+end
+
+function compute_density()
+    for i=1:PARTICLE_NUM
+        x=ceil(particles(i,1));
+        y=ceil(particles(i,2));
+        index=grid_hash(y,x,1);
+
+        xstart=x;
+        if x>1
+            xstart=x-1;
+        end
+        xend=x;
+        if x<GRID_W
+            xend=x+1;
+        end
+
+        ystart=y;
+        if y>1
+            ystart=y-1;
+        end
+        yend=y;
+        if y<GRID_H
+            yend=y+1;
+        end
+
+        sum=0;
+
+        for gx=xstart:xend
+            for gy=ystart:yend
+                if index>1
+                    j=2;
+                    while j<index
+                        d_sqr=dot(particles(i,:)-particles(j,:),particles(i,:)-particles(j,:));
+                        if d_sqr<R2
+                            sum=sum+poly6kernel(d_sqr*0.005);
                         end
+                        j=j+1;
                     end
                 end
             end
         end
 
+        particle_d(i)=sum*M+0.0001;
+        particle_p(i)=GAS_CONSTANT*(particle_d(i)-RESTDENSITY);
+    end
+end
+
+function compute_acc()
+    for i=1:PARTICLE_NUM
+        x=ceil(particles(i,1));
+        y=ceil(particles(i,2));
+        index=grid_hash(y,x,1);
+
+        xstart=x;
+        if x>1
+            xstart=x-1;
+        end
+        xend=x;
+        if x<GRID_W
+            xend=x+1;
+        end
+
+        ystart=y;
+        if y>1
+            ystart=y-1;
+        end
+        yend=y;
+        if y<GRID_H
+            yend=y+1;
+        end
+
+        pressure=zeros(2);
+        viscosity=zeros(2);
+
+        for gx=xstart:xend
+            for gy=ystart:yend
+                if index>1
+                    j=2;
+                    while j<index
+                        if i~=j
+                            d=norm(particles(i,:)-particles(j,:))+0.0001;
+                            if d<R
+                                pd=(particles(i,:)-particles(j,:))/d;
+                                pc=M2*spikykernelg(d,pd);
+                                pc=pc*particle_p(i)/particle_p(j)/(particle_d(i)*particle_d(i));
+
+                                vc=VISCOSITY*M2*(particle_v(j,:)-particle_v(i,:))/particle_d(i);
+                                vc=vc*spikykerneld2(d);
+
+                                pressure=pressure+pc;
+                                viscosity=viscosity+vc;
+                            end
+                        end
+                        j=j+1;
+                    end
+                end
+            end
+        end
+
+        particle_a(i,1)=-pressure(1)/M+viscosity(1)/M;
+        particle_a(i,2)=GRAVITY-pressure(2)/M+viscosity(2)/M;
+    end
 end
 
 clear global;
@@ -477,44 +213,19 @@ close all;
 for t=1:TIME_STEP_TOTAL
     % clear grid
     grid=zeros(GRID_H,GRID_W);
-    grid_v_x=zeros(GRID_H,GRID_W+1);
-    grid_v_y=zeros(GRID_H+1,GRID_W);
-    grid_v_x_w=zeros(GRID_H,GRID_W+1);
-    grid_v_y_w=zeros(GRID_H+1,GRID_W);
     
     % add gravity to particle
     add_gravity();
     % update particles in grid
     solve_bound_collision();
-    % calculate particle collision
+
     hash_particles();
-    particle_collision();
 
-    for i=1:PARTICLE_NUM
-        % push particles to grid
-        if is_out_of_bound(particles(i,:))
-            continue;
-        end
-        grid(ceil(particles(i,2)),ceil(particles(i,1)))=grid(ceil(particles(i,2)),ceil(particles(i,1)))+1;
-        % push particle velocity to corresponding grid velocity
-        particle_vx_to_grid(particle_v(i,1),particles(i,:));
-        particle_vy_to_grid(particle_v(i,2),particles(i,:));
-    end
+    compute_density();
 
-    % clear particle velocity after interpolation
-    %particle_v_copy=particle_v;
-    %particle_v=zeros(PARTICLE_NUM,2);
-    
-    % make grid incompressible
-    solve_incompressible();
+    compute_acc();
 
-    % add particle velocity back
-    for i=1:PARTICLE_NUM
-        %grid_vx_to_particle(particles(i,:),i);
-        %grid_vy_to_particle(particles(i,:),i);
-    end
-
-    %particle_v=CO*particle_v_copy+(1-CO)*particle_v;
+    particle_v=particle_v+particle_a*DT;
 
     % update position
     particles=particles+particle_v*DT;
@@ -529,7 +240,7 @@ for t=1:TIME_STEP_TOTAL
     imshow(flipud(img));
     %imshow(flipud(grid));
     %h.GridVisible='off';
-    %disp(min(particle_v(:),[],'all'))
+    %disp(max(particle_a,[],'all'))
     %set(gca, 'XLim', [0,10], 'YLim', [0,10])
     %plot(particles(:,1),particles(:,2),'ro', 'MarkerSize', 3)
     %set(gca, 'XLim', [0,10], 'YLim', [0,10])
