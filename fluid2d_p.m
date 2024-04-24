@@ -3,10 +3,10 @@ function fluid2d_p()
 GRAVITY=-1;
 DT=0.1;
 TIME_STEP_TOTAL=1000;
-PARTICLE_NUM=500;
-GRID_H=10;
-GRID_W=10;
-GRID_HASH_SIZE=100;
+PARTICLE_NUM=50;
+GRID_H=5;
+GRID_W=5;
+GRID_HASH_SIZE=10;
 
 % particle properties
 M=0.1;
@@ -20,7 +20,7 @@ GAS_CONSTANT=2;
 RESTDENSITY=2;
 VISCOSITY=-0.01;
 
-img=zeros(GRID_H*5,GRID_W*5);
+img=zeros(GRID_H*5,GRID_W*5,3);
 
 grid_hash=zeros(GRID_H,GRID_W,GRID_HASH_SIZE);
 unhashed_particles=zeros(PARTICLE_NUM+1);
@@ -34,10 +34,6 @@ particle_v=zeros(PARTICLE_NUM,2);
 particle_a=zeros(PARTICLE_NUM,2);
 particle_d=zeros(PARTICLE_NUM,2);
 particle_p=zeros(PARTICLE_NUM,2);
-
-function add_gravity()
-    particle_v(:,2)=particle_v(:,2)+GRAVITY*DT;
-end
 
 function outbound = is_out_of_bound(pos)
     outbound=(pos(1)<=0||pos(1)>=GRID_W)||(pos(2)<=0||pos(2)>=GRID_H);
@@ -76,8 +72,12 @@ function hash_particles()
             continue;
         end
         if grid_hash(y,x,1)<GRID_HASH_SIZE-1
-            grid_hash(y,x,1)=grid_hash(y,x,1)+1;
-            grid_hash(y,x,grid_hash(y,x,1)+1)=i;
+            if grid_hash(y,x,1)==0
+                grid_hash(y,x,1)=2;
+            else
+                grid_hash(y,x,1)=grid_hash(y,x,1)+1;
+            end
+            grid_hash(y,x,grid_hash(y,x,1))=i;
         else
             unhashed_particles(1)=unhashed_particles(1)+1;
             unhashed_particles(unhashed_particles(1)+1)=i;
@@ -108,7 +108,6 @@ function compute_density()
     for i=1:PARTICLE_NUM
         x=ceil(particles(i,1));
         y=ceil(particles(i,2));
-        index=grid_hash(y,x,1);
 
         xstart=x;
         if x>1
@@ -132,14 +131,21 @@ function compute_density()
 
         for gx=xstart:xend
             for gy=ystart:yend
+                index=grid_hash(gy,gx,1);
                 if index>1
-                    j=2;
-                    while j<index
-                        d_sqr=dot(particles(i,:)-particles(j,:),particles(i,:)-particles(j,:));
-                        if d_sqr<R2
-                            sum=sum+poly6kernel(d_sqr*0.005);
+                    ii=2;
+                    while ii+1<index
+                        j=grid_hash(gy,gx,ii);
+                        if i~=j
+                            d_sqr=dot(particles(i,:)-particles(j,:),particles(i,:)-particles(j,:));
+                            if d_sqr<R2
+                                sum=sum+poly6kernel(d_sqr*0.05);
+                                %disp(d_sqr)
+                                %disp("fuck matlab")
+                                %disp(poly6kernel(d_sqr*0.005))
+                            end
                         end
-                        j=j+1;
+                        ii=ii+1;
                     end
                 end
             end
@@ -154,7 +160,6 @@ function compute_acc()
     for i=1:PARTICLE_NUM
         x=ceil(particles(i,1));
         y=ceil(particles(i,2));
-        index=grid_hash(y,x,1);
 
         xstart=x;
         if x>1
@@ -177,26 +182,30 @@ function compute_acc()
         pressure=zeros(2);
         viscosity=zeros(2);
 
+        D2=particle_d(i)*particle_d(i);
+
         for gx=xstart:xend
             for gy=ystart:yend
+                index=grid_hash(gy,gx,1);
                 if index>1
-                    j=2;
-                    while j<index
-                        if i~=j
-                            d=norm(particles(i,:)-particles(j,:))+0.0001;
+                    ii=2;
+                    while ii<index
+                        j=grid_hash(gy,gx,ii);
+                        d=norm(particles(i,:)-particles(j,:));
+                        if d~=0
                             if d<R
                                 pd=(particles(i,:)-particles(j,:))/d;
                                 pc=M2*spikykernelg(d,pd);
-                                pc=pc*particle_p(i)/particle_p(j)/(particle_d(i)*particle_d(i));
+                                pc=pc*(particle_p(i)/D2+particle_p(j)/(particle_d(j)*particle_d(j)));
 
-                                vc=VISCOSITY*M2*(particle_v(j,:)-particle_v(i,:))/particle_d(i);
+                                vc=VISCOSITY*M2*(particle_v(j,:)-particle_v(i,:))/particle_d(j);
                                 vc=vc*spikykerneld2(d);
 
                                 pressure=pressure+pc;
                                 viscosity=viscosity+vc;
                             end
                         end
-                        j=j+1;
+                        ii=ii+1;
                     end
                 end
             end
@@ -214,8 +223,6 @@ for t=1:TIME_STEP_TOTAL
     % clear grid
     grid=zeros(GRID_H,GRID_W);
     
-    % add gravity to particle
-    add_gravity();
     % update particles in grid
     solve_bound_collision();
 
@@ -223,24 +230,26 @@ for t=1:TIME_STEP_TOTAL
 
     compute_density();
 
-    compute_acc();
+    %compute_acc();
 
     particle_v=particle_v+particle_a*DT;
 
     % update position
     particles=particles+particle_v*DT;
 
-    img=zeros(GRID_H*5,GRID_W*5);
+    img=zeros(GRID_H*5,GRID_W*5,3);
     for i=1:PARTICLE_NUM
         if ~is_out_of_bound(particles(i,:))
-            img(ceil(particles(i,2)*5),ceil(particles(i,1)*5))=img(ceil(particles(i,2)*5),ceil(particles(i,1)*5))+1;
+            %img(ceil(particles(i,2)*5),ceil(particles(i,1)*5))=img(ceil(particles(i,2)*5),ceil(particles(i,1)*5))+1;
+            img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),1)=1;
+            img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),2)=img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),2)+particle_p(i)/5;
         end
     end
     
     imshow(flipud(img));
     %imshow(flipud(grid));
     %h.GridVisible='off';
-    %disp(max(particle_a,[],'all'))
+    %disp(min(particle_a,[],'all'))
     %set(gca, 'XLim', [0,10], 'YLim', [0,10])
     %plot(particles(:,1),particles(:,2),'ro', 'MarkerSize', 3)
     %set(gca, 'XLim', [0,10], 'YLim', [0,10])
