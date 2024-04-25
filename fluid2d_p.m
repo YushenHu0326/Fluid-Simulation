@@ -1,169 +1,99 @@
 function fluid2d_p()
 
 GRAVITY=-10;
-DT=0.05;
-TIME_STEP_TOTAL=1000;
+DT=0.01;
+TIME_STEP_TOTAL=5000;
 PARTICLE_NUM=500;
-GRID_H=20;
-GRID_W=20;
-GRID_HASH_SIZE=100;
+GRID_H=1;
+GRID_W=1;
 
 % particle properties
 M=0.1;
-M2=M*M;
-R=1;
-R2=R*R;
-R3=R*R2;
-R4=R*R3;
-R5=R*R4;
-GAS_CONSTANT=2;
-RESTDENSITY=2;
-VISCOSITY=0;
+DAMP=1;
+SMOOTHING_LEN=0.01;
+DENS_TO_P=0.04;
 
-img=zeros(GRID_H*5,GRID_W*5,3);
-
-grid_hash=zeros(GRID_H,GRID_W,GRID_HASH_SIZE);
-unhashed_particles=zeros(PARTICLE_NUM+1);
+%img=zeros(GRID_H*5,GRID_W*5,3);
 
 particles=zeros(PARTICLE_NUM,2);
+px=SMOOTHING_LEN;
+py=SMOOTHING_LEN+0.2;
 for i=1:PARTICLE_NUM
-    particles(i,1)=rand*GRID_W/2+GRID_W/4;
-    particles(i,2)=rand*GRID_H/2+GRID_W/4;
+    particles(i,1)=px+SMOOTHING_LEN*2;
+    particles(i,2)=py;
+    px=px+SMOOTHING_LEN*2;
+    if px>GRID_W/4
+        py=py+SMOOTHING_LEN*2;
+        px=SMOOTHING_LEN;
+    end
 end
 particle_v=zeros(PARTICLE_NUM,2);
 particle_a=zeros(PARTICLE_NUM,2);
 particle_d=zeros(PARTICLE_NUM,2);
 particle_p=zeros(PARTICLE_NUM,2);
 
-function outbound = is_out_of_bound(pos)
-    outbound=(pos(1)<=0||pos(1)>=GRID_W)||(pos(2)<=0||pos(2)>=GRID_H);
-end
-
 function solve_bound_collision()
     for i=1:PARTICLE_NUM
         x=particles(i,1);
         y=particles(i,2);
         if x<0
-            particles(i,1)=0.5;
-            particle_v(i,1)=-particle_v(i,1)/5;
+            particles(i,1)=0;
+            particle_a(i,1)=100;
         end
         if x>GRID_W
-            particles(i,1)=GRID_W-0.5;
-            particle_v(i,1)=-particle_v(i,1)/5;
+            particles(i,1)=GRID_W;
+            particle_a(i,1)=-100;
         end
         if y<0
-            particles(i,2)=0.5;
-            particle_v(i,2)=-particle_v(i,2)/5;
+            particles(i,2)=0;
+            particle_a(i,2)=100;
         end
         if y>GRID_H
-            particles(i,2)=GRID_H-0.5;
-            particle_v(i,2)=-particle_v(i,2)/5;
+            particles(i,2)=GRID_H;
+            particle_a(i,2)=-100;
         end
     end
 end
 
-function hash_particles()
-    grid_hash=zeros(GRID_H,GRID_W,GRID_HASH_SIZE);
-    unhashed_particles=zeros(PARTICLE_NUM+1);
-    for i=1:PARTICLE_NUM
-        x=ceil(particles(i,1));
-        y=ceil(particles(i,2));
-        if is_out_of_bound([x,y])
-            continue;
-        end
-        if grid_hash(y,x,1)<GRID_HASH_SIZE-1
-            if grid_hash(y,x,1)==0
-                grid_hash(y,x,1)=2;
-            else
-                grid_hash(y,x,1)=grid_hash(y,x,1)+1;
-            end
-            grid_hash(y,x,grid_hash(y,x,1))=i;
-        else
-            unhashed_particles(1)=unhashed_particles(1)+1;
-            unhashed_particles(unhashed_particles(1)+1)=i;
-        end
-    end
+function k = kernel(r,h)
+    k=1/(h^2*pi)*exp(norm(r)^2/h^2);	
 end
 
-function k = poly6kernel(distance_sqr)
-    x=1-distance_sqr/R2;
-    k=315/(64*pi*R3)*x*x*x;
-end
-
-function k = spikykerneld1(distance)
-    x=1-distance/R;
-    k=-45/(pi*R4)*x*x;
-end
-
-function k = spikykerneld2(distance)
-    x=1-distance/R;
-    k=90/(pi*R5)*x;
-end
-
-function k = spikykernelg(distance,direction)
-    k=spikykerneld1(distance)*direction;
+function k = kernelg(r,h)
+	n=-2*exp(-norm(r)^2/h^2)/(h^4*pi) ;
+	k=n.*r;	
 end
 
 function compute_density()
     for i=1:PARTICLE_NUM
-        x=ceil(particles(i,1));
-        y=ceil(particles(i,2));
-
-        sum=0;
-        index=grid_hash(y,x,1);
-        if index>1
-            ii=2;
-            while ii<=index
-                j=grid_hash(y,x,ii);
-                d=norm(particles(i,:)-particles(j,:));
-                if d<R
-                    sum=sum+poly6kernel(d*d*0.004);
-                end
-            ii=ii+1;
+        particle_d(i)=M*kernel(0,SMOOTHING_LEN);
+        for j=i+1:PARTICLE_NUM
+            d=particles(i,:)-particles(j,:);
+            if norm(d)<SMOOTHING_LEN
+                dens=M*kernel(d,SMOOTHING_LEN);
+                particle_d(i)=particle_d(i)+dens;
+                particle_d(j)=particle_d(j)+dens;
             end
         end
 
-        particle_d(i)=sum*M+0.0001;
-        particle_p(i)=GAS_CONSTANT*(particle_d(i)-RESTDENSITY);
+        particle_p(i)=DENS_TO_P*particle_d(i);
     end
 end
 
 function compute_acc()
     for i=1:PARTICLE_NUM
-        x=ceil(particles(i,1));
-        y=ceil(particles(i,2));
-
-        pressure=zeros(2);
-        viscosity=zeros(2);
-
-        D2=particle_d(i)*particle_d(i);
-
-        index=grid_hash(y,x,1);
-        if index>1
-            ii=2;
-            while ii<=index
-                j=grid_hash(y,x,ii);
-                d=norm(particles(i,:)-particles(j,:));
-                if d~=0
-                    if d<R && particle_d(j)>0.0001
-                        pd=(particles(i,:)-particles(j,:))/d;
-                        pc=M2*spikykernelg(d,pd);
-                        pc=pc*(particle_p(i)/D2+particle_p(j)/(particle_d(j)*particle_d(j)));
-
-                        vc=VISCOSITY*M2*(particle_v(j,:)-particle_v(i,:))/particle_d(j);
-                        vc=vc*spikykerneld2(d);
-
-                        pressure=pressure+pc;
-                        viscosity=viscosity+vc;
-                    end
-                end
-                ii=ii+1;
+        for j=i+1:PARTICLE_NUM
+            d=particles(i,:)-particles(j,:);
+            if norm(d)<SMOOTHING_LEN
+                a=-M*(particle_p(i)/particle_d(i)^2+particle_p(j)/particle_d(j)^2)*kernelg(d,SMOOTHING_LEN);
+                particle_a(i,1)=particle_a(i,1)+a(1);
+                particle_a(i,2)=particle_a(i,2)+a(1);
+                particle_a(j,1)=particle_a(j,1)-a(2);
+                particle_a(j,2)=particle_a(j,2)-a(2);
             end
         end
-
-        particle_a(i,1)=-pressure(1)/M+viscosity(1)/M;
-        particle_a(i,2)=GRAVITY-pressure(2)/M+viscosity(2)/M;
-        %disp(pressure(2))
+        particle_a(i,1)=particle_a(i,1)-DAMP*particle_v(i,1);
+        particle_a(i,2)=particle_a(i,2)-DAMP*particle_v(i,2);
     end
 end
 
@@ -171,39 +101,40 @@ clear global;
 close all;
 
 for t=1:TIME_STEP_TOTAL
-    % clear grid
-    grid=zeros(GRID_H,GRID_W);
-    
+    particle_a=zeros(PARTICLE_NUM,2);
+    particle_a(:,2)=GRAVITY;
     % update particles in grid
     solve_bound_collision();
-
-    hash_particles();
-
     compute_density();
-
     compute_acc();
-
     particle_v=particle_v+particle_a*DT;
 
     % update position
     particles=particles+particle_v*DT;
 
-    img=zeros(GRID_H*5,GRID_W*5,3);
-    for i=1:PARTICLE_NUM
-        if ~is_out_of_bound(particles(i,:))
+    %img=zeros(GRID_H*5,GRID_W*5,3);
+    %for i=1:PARTICLE_NUM
+        %disp(particles(i,:))
+        %if ~is_out_of_bound(particles(i,:))
+            %disp(particles(i,:))
             %img(ceil(particles(i,2)*5),ceil(particles(i,1)*5))=img(ceil(particles(i,2)*5),ceil(particles(i,1)*5))+1;
-            img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),1)=1;
-            img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),2)=img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),2)+norm(particle_p(i))/20;
-        end
-    end
+            %img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),1)=1;
+            %img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),2)=img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),2)+particle_d(i)/50;
+        %end
+    %end
     
-    imshow(flipud(img));
+    %imshow(flipud(img));
     %imshow(flipud(grid));
     %h.GridVisible='off';
     %disp(max(particle_a(:,2),[],'all'))
     %set(gca, 'XLim', [0,10], 'YLim', [0,10])
     %plot(particles(:,1),particles(:,2),'ro', 'MarkerSize', 3)
     %set(gca, 'XLim', [0,10], 'YLim', [0,10])
+
+    plot(particles(:,1),particles(:,2),'b.');
+    axis equal
+    xlim([0,GRID_W]);
+    ylim([0,GRID_H]);
     drawnow
 
 end
