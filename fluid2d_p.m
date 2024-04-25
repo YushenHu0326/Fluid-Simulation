@@ -10,20 +10,20 @@ GRID_W=1;
 % particle properties
 M=0.1;
 DAMP=1;
-SMOOTHING_LEN=0.01;
-DENS_TO_P=0.04;
+SMOOTHING_LEN=0.02;
+DENS_TO_P=0.05;
 
-%img=zeros(GRID_H*5,GRID_W*5,3);
+img=zeros(500,500,3);
 
 particles=zeros(PARTICLE_NUM,2);
 px=SMOOTHING_LEN;
-py=SMOOTHING_LEN+0.2;
+py=SMOOTHING_LEN;
 for i=1:PARTICLE_NUM
-    particles(i,1)=px+SMOOTHING_LEN*2;
+    particles(i,1)=px+SMOOTHING_LEN;
     particles(i,2)=py;
-    px=px+SMOOTHING_LEN*2;
-    if px>GRID_W/4
-        py=py+SMOOTHING_LEN*2;
+    px=px+SMOOTHING_LEN;
+    if px>0.2
+        py=py+SMOOTHING_LEN;
         px=SMOOTHING_LEN;
     end
 end
@@ -32,7 +32,13 @@ particle_a=zeros(PARTICLE_NUM,2);
 particle_d=zeros(PARTICLE_NUM,2);
 particle_p=zeros(PARTICLE_NUM,2);
 
-function solve_bound_collision()
+obstacle=[0.5,0.2,0.3];
+
+function outbound = is_out_of_bound(pos)
+    outbound=(pos(1)<=0||pos(1)>=GRID_W)||(pos(2)<=0||pos(2)>=GRID_H);
+end
+
+function solve_bound_collision(obstacle_on)
     for i=1:PARTICLE_NUM
         x=particles(i,1);
         y=particles(i,2);
@@ -51,6 +57,14 @@ function solve_bound_collision()
         if y>GRID_H
             particles(i,2)=GRID_H;
             particle_a(i,2)=-100;
+        end
+
+        if obstacle_on
+            if norm(particles(i,:)-[obstacle(1),obstacle(2)])<obstacle(3)
+                d=particles(i,:)-[obstacle(1),obstacle(2)];
+                particles(i,:)=d/norm(d)*obstacle(3)+[obstacle(1),obstacle(2)];
+                particle_a(i,:)=particle_a(i,:)+d*100;
+            end
         end
     end
 end
@@ -100,30 +114,40 @@ end
 clear global;
 close all;
 
+present_heatmap=1;
+
 for t=1:TIME_STEP_TOTAL
     particle_a=zeros(PARTICLE_NUM,2);
     particle_a(:,2)=GRAVITY;
     % update particles in grid
-    solve_bound_collision();
+    solve_bound_collision(1);
     compute_density();
     compute_acc();
     particle_v=particle_v+particle_a*DT;
 
     % update position
     particles=particles+particle_v*DT;
-
-    %img=zeros(GRID_H*5,GRID_W*5,3);
-    %for i=1:PARTICLE_NUM
-        %disp(particles(i,:))
-        %if ~is_out_of_bound(particles(i,:))
-            %disp(particles(i,:))
-            %img(ceil(particles(i,2)*5),ceil(particles(i,1)*5))=img(ceil(particles(i,2)*5),ceil(particles(i,1)*5))+1;
-            %img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),1)=1;
-            %img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),2)=img(ceil(particles(i,2)*5),ceil(particles(i,1)*5),2)+particle_d(i)/50;
-        %end
-    %end
     
-    %imshow(flipud(img));
+    if present_heatmap
+        img=zeros(500,500,3);
+        for i=1:PARTICLE_NUM
+            if ~is_out_of_bound(particles(i,:))
+                img(ceil(particles(i,2)/GRID_W*500),ceil(particles(i,1)/GRID_H*500))=img(ceil(particles(i,2)/GRID_W*500),ceil(particles(i,1)/GRID_H*500))+1;
+                img(ceil(particles(i,2)/GRID_W*500),ceil(particles(i,1)/GRID_H*500),1)=1;
+                img(ceil(particles(i,2)/GRID_W*500),ceil(particles(i,1)/GRID_H*500),2)=img(ceil(particles(i,2)/GRID_W*500),ceil(particles(i,1)/GRID_H*500),2)+particle_d(i)/1000;
+            end
+        end
+        imshow(flipud(img));
+        drawnow
+    else
+        plot(particles(:,1),particles(:,2),'b.');
+        viscircles([obstacle(1),obstacle(2)],obstacle(3));
+        axis equal
+        xlim([0,GRID_W]);
+        ylim([0,GRID_H]);
+        drawnow
+        obstacle(2)=obstacle(2)+0.001;
+    end
     %imshow(flipud(grid));
     %h.GridVisible='off';
     %disp(max(particle_a(:,2),[],'all'))
@@ -131,11 +155,6 @@ for t=1:TIME_STEP_TOTAL
     %plot(particles(:,1),particles(:,2),'ro', 'MarkerSize', 3)
     %set(gca, 'XLim', [0,10], 'YLim', [0,10])
 
-    plot(particles(:,1),particles(:,2),'b.');
-    axis equal
-    xlim([0,GRID_W]);
-    ylim([0,GRID_H]);
-    drawnow
 
 end
 
