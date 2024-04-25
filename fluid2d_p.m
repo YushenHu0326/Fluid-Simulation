@@ -3,6 +3,7 @@ function fluid2d_p()
 GRAVITY=-10;
 DT=0.01;
 TIME_STEP_TOTAL=5000;
+MAX_PARTICLE_NUM=1000;
 PARTICLE_NUM=500;
 GRID_H=1;
 GRID_W=1;
@@ -15,19 +16,33 @@ DENS_TO_P=0.05;
 
 img=zeros(500,500,3);
 
-particles=zeros(PARTICLE_NUM,2);
-px=SMOOTHING_LEN;
-py=SMOOTHING_LEN;
-for i=1:PARTICLE_NUM
-    particles(i,1)=px+SMOOTHING_LEN;
-    particles(i,2)=py;
-    px=px+SMOOTHING_LEN;
-    if px>0.2
-        py=py+SMOOTHING_LEN;
-        px=SMOOTHING_LEN;
-    end
-end
+generate_method=1;
+present_heatmap=0;
+has_obstacle=0;
+
 particle_v=zeros(PARTICLE_NUM,2);
+
+if generate_method==0
+    particles=zeros(PARTICLE_NUM,2);
+    px=SMOOTHING_LEN;
+    py=SMOOTHING_LEN;
+    for i=1:PARTICLE_NUM
+        particles(i,1)=px+SMOOTHING_LEN;
+        particles(i,2)=py;
+        px=px+SMOOTHING_LEN;
+        if px>0.2
+            py=py+SMOOTHING_LEN;
+            px=SMOOTHING_LEN;
+        end
+    end
+else
+    PARTICLE_NUM=1;
+    particles(1,1)=0;
+    particles(1,2)=GRID_H/2;
+    particle_v=zeros(PARTICLE_NUM,2);
+    particle_v(1,1)=2+rand;
+end
+
 particle_a=zeros(PARTICLE_NUM,2);
 particle_d=zeros(PARTICLE_NUM,2);
 particle_p=zeros(PARTICLE_NUM,2);
@@ -86,7 +101,7 @@ function compute_density()
             if norm(d)<SMOOTHING_LEN
                 dens=M*kernel(d,SMOOTHING_LEN);
                 particle_d(i)=particle_d(i)+dens;
-                particle_d(j)=particle_d(j)+dens;
+                %particle_d(j)=particle_d(j)+dens;
             end
         end
 
@@ -114,13 +129,22 @@ end
 clear global;
 close all;
 
-present_heatmap=1;
-
 for t=1:TIME_STEP_TOTAL
+    if generate_method==1
+        if PARTICLE_NUM<MAX_PARTICLE_NUM
+            PARTICLE_NUM=PARTICLE_NUM+1;
+            particles(t+1,1)=0;
+            particles(t+1,2)=GRID_H/2;
+            particle_v(t+1,1)=2+rand;
+        end
+    end
     particle_a=zeros(PARTICLE_NUM,2);
+    particle_d=zeros(PARTICLE_NUM,2);
+    particle_p=zeros(PARTICLE_NUM,2);
+
     particle_a(:,2)=GRAVITY;
     % update particles in grid
-    solve_bound_collision(1);
+    solve_bound_collision(has_obstacle);
     compute_density();
     compute_acc();
     particle_v=particle_v+particle_a*DT;
@@ -141,7 +165,9 @@ for t=1:TIME_STEP_TOTAL
         drawnow
     else
         plot(particles(:,1),particles(:,2),'b.');
-        viscircles([obstacle(1),obstacle(2)],obstacle(3));
+        if has_obstacle
+            viscircles([obstacle(1),obstacle(2)],obstacle(3));
+        end
         axis equal
         xlim([0,GRID_W]);
         ylim([0,GRID_H]);
